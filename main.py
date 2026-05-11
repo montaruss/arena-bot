@@ -2236,6 +2236,9 @@ if __name__ == "__main__":
     from aiohttp import web
     from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
     import os
+
+    init_db()
+    print("✅ База данных инициализирована")
     
     # Читаем переменные здесь
     WEBHOOK_URL = os.getenv("WEBHOOK_URL")
