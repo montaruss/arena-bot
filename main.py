@@ -193,6 +193,13 @@ PACKS = {
     "epic": {"name": "👑 Эпический", "price": 300, "pool": ["3", "4", "6", "7", "8", "9", "10"]}
 }
 
+# ✅ Правильное чтение токена из переменных Render
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+if not BOT_TOKEN:
+    print("❌ ОШИБКА: Токен не найден в переменных окружения!")
+    exit()
+
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 
