@@ -2237,6 +2237,10 @@ if __name__ == "__main__":
     from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
     import os
     
+    # Читаем переменные здесь
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+    BOT_TOKEN = os.getenv("BOT_TOKEN")
+    
     # Настройки сервера
     WEBAPP_HOST = '0.0.0.0'
     WEBAPP_PORT = int(os.environ.get('PORT', 8080))
@@ -2244,6 +2248,7 @@ if __name__ == "__main__":
     async def on_startup(app):
         if WEBHOOK_URL:
             await bot.set_webhook(WEBHOOK_URL, allowed_updates=dp.resolve_used_update_types())
+            print(f"✅ Webhook установлен: {WEBHOOK_URL}")
         else:
             logging.warning("WEBHOOK_URL не задан!")
     
