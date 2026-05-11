@@ -2233,4 +2233,19 @@ async def main():
         await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    from aiogram.utils.webhook import SimpleWebhook
+    import os
+
+    # Создаем приложение-обертку для вебхука
+    app = SimpleWebhook(
+        bot,
+        dp,
+        handle_incoming_updates=True,
+        webhook_path="/webhook",
+        url=os.getenv("WEBHOOK_URL"),
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 8080))
+    )
+    
+    print(f"🚀 Бот запущен на порту {os.environ.get('PORT', 8080)}")
+    app.run()
