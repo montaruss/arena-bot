@@ -2233,19 +2233,33 @@ async def main():
         await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    from aiogram.utils.webhook import SimpleWebhook
+    from aiohttp import web
+    from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
     import os
-
-    # Создаем приложение-обертку для вебхука
-    app = SimpleWebhook(
-        bot,
-        dp,
-        handle_incoming_updates=True,
-        webhook_path="/webhook",
-        url=os.getenv("WEBHOOK_URL"),
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", 8080))
-    )
     
-    print(f"🚀 Бот запущен на порту {os.environ.get('PORT', 8080)}")
-    app.run()
+    # Настройки сервера
+    WEBAPP_HOST = '0.0.0.0'
+    WEBAPP_PORT = int(os.environ.get('PORT', 8080))
+    
+    async def on_startup(app):
+        if WEBHOOK_URL:
+            await bot.set_webhook(WEBHOOK_URL, allowed_updates=dp.resolve_used_update_types())
+        else:
+            logging.warning("WEBHOOK_URL не задан!")
+    
+    async def on_shutdown(app):
+        logging.info("Бот останавливается...")
+        await bot.delete_webhook()
+        await bot.session.close()
+    
+    # Создаем веб-приложение
+    app = web.Application()
+    app.on_startup.append(on_startup)
+    app.on_shutdown.append(on_shutdown)
+    
+    # Настраиваем обработчик вебхука
+    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
+    setup_application(app, dp, bot=bot)
+    
+    print(f"🚀 Бот запущен на порту {WEBAPP_PORT}")
+    web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
