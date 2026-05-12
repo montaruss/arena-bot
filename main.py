@@ -5,6 +5,8 @@ import os
 import logging
 import sqlite3
 import asyncio
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import time
 import re
 from aiogram import Bot, Dispatcher, types, F
@@ -216,22 +218,31 @@ def main_kb(uid=None):
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def get_user(uid):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT * FROM players WHERE user_id=?", (uid,))
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    c = conn.cursor(cursor_factory=RealDictCursor)
+    c.execute("SELECT * FROM players WHERE user_id=%s", (uid,))
     row = c.fetchone()
+    
     if not row:
-        c.execute("""INSERT INTO players VALUES 
-            (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (uid, "Игрок", 500, 1000, 5, int(time.time()), None, 
-             '{"1":5,"2":3}', '{"basic":2,"rare":0,"epic":0}', 
-             '["1","2","3","4","5","6"]', 1, 0, 
-             '{"max_rarity":1,"relic_slots":0,"trap_level":0,"equipment_slots":0,"mana_regen":0,"crit_chance":0}', 
-             '{}', '{}', 0, 0))
+        c.execute("""INSERT INTO players 
+            (user_id, name, gold, rating, energy, energy_time, clan_id, cards, packs, deck, 
+             base_level, base_xp, base_skills, equipment, relics, wins, losses) 
+            VALUES (%s, %s, 500, 1000, 5, %s, NULL, %s, %s, %s, 1, 0, %s, %s, %s, 0, 0)""",
+            (uid, "Игрок", int(time.time()), '{"1":5,"2":3}', '{"basic":2,"rare":0,"epic":0}', 
+             '["1","2","3","4","5","6"]', 
+             '{"max_rarity":1,"relic_slots":0,"trap_level":0,"equipment_slots":0,"mana_regen":0,"crit_chance":0}',
+             '{}', '{}'))
         conn.commit()
-        row = c.execute("SELECT * FROM players WHERE user_id=?", (uid,)).fetchone()
+        c.execute("SELECT * FROM players WHERE user_id=%s", (uid,))
+        row = c.fetchone()
+    
     conn.close()
-    return row
+    
+    # Возвращаем как кортеж (как в SQLite)
+    return (row['user_id'], row['name'], row['gold'], row['rating'], row['energy'], 
+            row['energy_time'], row['clan_id'], row['cards'], row['packs'], row['deck'],
+            row['base_level'], row['base_xp'], row['base_skills'], row['equipment'], 
+            row['relics'], row['wins'], row['losses'])
 
 def is_registered(uid):
     """Проверяет, зарегистрирован ли пользователь"""
