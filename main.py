@@ -254,12 +254,12 @@ def get_empty_kb():
     return ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
 
 def update_user(uid, **kwargs):
-    conn = sqlite3.connect(DB_NAME)
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
     for k, v in kwargs.items():
         if isinstance(v, (dict, list)):
             v = json.dumps(v)
-        c.execute(f"UPDATE players SET {k}=? WHERE user_id=?", (v, uid))
+        c.execute(f"UPDATE players SET {k}=%s WHERE user_id=%s", (v, uid))
     conn.commit()
     conn.close()
 
@@ -2247,9 +2247,6 @@ if __name__ == "__main__":
     from aiohttp import web
     from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
     import os
-
-    init_db()
-    print("✅ База данных инициализирована")
     
     # Читаем переменные здесь
     WEBHOOK_URL = os.getenv("WEBHOOK_URL")
