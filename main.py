@@ -1955,7 +1955,7 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
     action_text = ""
     
     if skill['type'] == 'heal':
-        heal_amount = int(skill.get('heal', 0)
+        heal_amount = int(skill.get('heal', 0))
         if combo_bonus > 0: heal_amount = int(heal_amount * (1 + combo_bonus/100))
         new_hp = min(data['raid_player_max_hp'], data['raid_player_hp'] + heal_amount)
         await state.update_data(raid_player_hp=new_hp)
