@@ -1334,21 +1334,21 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
                         break
             
             if skill_type == 'heal':
-                heal_amount = skill.get('heal', 15)
+                heal_amount = int(skill.get('heal', 0))
                 if combo_bonus > 0:
                     heal_amount = int(heal_amount * (1 + combo_bonus/100))
                 my_hp = min(data['my_max_hp'], my_hp + heal_amount)
                 result_text += f"✨ {my_role_name} восстановил {heal_amount} HP\n"
                 
             elif skill_type == 'defend':
-                def_amount = skill.get('def', 10)
+                def_amount = int(skill.get('def', 0))
                 if combo_bonus > 0:
                     def_amount += int(def_amount * combo_bonus/100)
                 await state.update_data(defense_buff=def_amount)
                 result_text += f"🛡️ {my_role_name} повысил защиту на {def_amount}\n"
                 
             elif skill_type in ['attack', 'magic']:
-                base_dmg = skill.get('dmg', 15)
+                base_dmg = int(skill.get('dmg', 0))
                 if combo_bonus > 0:
                     base_dmg += int(base_dmg * combo_bonus/100)
                 enemy_hp -= base_dmg
@@ -1358,7 +1358,7 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
                 result_text += "\n"
                 
             elif skill_type == 'lifesteal':
-                base_dmg = skill.get('dmg', 12)
+                base_dmg = int(skill.get('dmg', 0))
                 lifesteal_pct = skill.get('lifesteal', 0.5)
                 if combo_bonus > 0:
                     base_dmg += int(base_dmg * combo_bonus/100)
@@ -1368,7 +1368,7 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
                 result_text += f"🩸 {my_role_name}: {base_dmg} урона, +{heal_amount} HP\n"
                 
             elif skill_type == 'berserk':
-                base_dmg = skill.get('dmg', 25)
+                base_dmg = int(skill.get('dmg', 0))
                 self_dmg = skill.get('self_dmg', 10)
                 if combo_bonus > 0:
                     base_dmg += int(base_dmg * combo_bonus/100)
@@ -1390,7 +1390,7 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
         
         if skill:
             if skill_type in ['attack', 'magic']:
-                base_dmg = skill.get('dmg', 15)
+                base_dmg = int(skill.get('dmg', 0))
                 defense = data.get('defense_buff', 0)
                 if defense > 0:
                     base_dmg = max(1, base_dmg - defense)
@@ -1400,7 +1400,7 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
                 result_text += f"⚔️ {enemy_role_name} нанёс {base_dmg} урона\n"
             
             elif skill_type == 'heal':
-                heal_amount = skill.get('heal', 15)
+                heal_amount = int(skill.get('heal', 0))
                 result_text += f"✨ {enemy_role_name} восстановил {heal_amount} HP\n"
     
     # ✅ ПРОВЕРКА ПОБЕДЫ
@@ -1447,26 +1447,19 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
     if chats:
         host_chat, guest_chat = chats
         
-        # Отправляем хосту
         try:
             await bot.send_message(host_chat, result_text)
-        except:
-            pass
-        
-        # Отправляем гостю
+        except: pass
         try:
             await bot.send_message(guest_chat, result_text)
-        except:
-            pass
+        except: pass
     
-    # Показываем меню боя обоим
     if random.random() < 0.3:
         await asyncio.sleep(1)
         await trigger_qte_live(room_id, state)
     else:
         await send_battle_to_both(room_id, state)
     
-    # ✅ СОХРАНЯЕМ ПОСЛЕДНИЕ НАВЫКИ ДЛЯ КОМБО
     if my_action:
         await state.update_data(
             last_unit_used=my_action.get("unit"),
