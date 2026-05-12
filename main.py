@@ -238,6 +238,27 @@ def get_user(uid):
     
     conn.close()
     
+    # ✅ ВОЗВРАЩАЕМ КОРТЕЖ (как в SQLite)
+    return (
+        row['user_id'],
+        row['name'],
+        row['gold'],
+        row['rating'],
+        row['energy'],
+        row['energy_time'],
+        row['clan_id'],
+        row['cards'],
+        row['packs'],
+        row['deck'],
+        row['base_level'],
+        row['base_xp'],
+        row['base_skills'],
+        row['equipment'],
+        row['relics'],
+        row['wins'],
+        row['losses']
+    )
+    
     # Возвращаем как кортеж (как в SQLite)
     return (row['user_id'], row['name'], row['gold'], row['rating'], row['energy'], 
             row['energy_time'], row['clan_id'], row['cards'], row['packs'], row['deck'],
