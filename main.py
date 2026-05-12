@@ -1955,20 +1955,20 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
     action_text = ""
     
     if skill['type'] == 'heal':
-        heal_amount = skill.get('heal', 15)
+        heal_amount = int(skill.get('heal', 0)
         if combo_bonus > 0: heal_amount = int(heal_amount * (1 + combo_bonus/100))
         new_hp = min(data['raid_player_max_hp'], data['raid_player_hp'] + heal_amount)
         await state.update_data(raid_player_hp=new_hp)
         action_text = f"✨ {skill['name']}: восстановлено <b>{heal_amount} HP</b>"
         
     elif skill['type'] == 'defend':
-        def_amount = skill.get('def', 10)
+        def_amount = int(skill.get('def', 0))
         if combo_bonus > 0: def_amount += int(def_amount * combo_bonus/100)
         await state.update_data(raid_defense_buff=def_amount)
         action_text = f"🛡️ {skill['name']}: защита повышена на <b>{def_amount}</b>"
         
     elif skill['type'] in ['attack', 'magic']:
-        base_dmg = skill.get('dmg', 15)
+        base_dmg = int(skill.get('dmg', 0))
         if combo_bonus > 0: base_dmg += int(base_dmg * combo_bonus/100)
         trap_mult = 1 - (data['raid_trap_level'] * 0.1)
         final_dmg = max(1, int(base_dmg * trap_mult))
@@ -1986,7 +1986,7 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
         await state.update_data(raid_enemy_hp=new_enemy_hp)
         
     elif skill['type'] == 'lifesteal':
-        base_dmg = skill.get('dmg', 12)
+        base_dmg = int(skill.get('dmg', 0))
         lifesteal_pct = skill.get('lifesteal', 0.5)
         if combo_bonus > 0: base_dmg += int(base_dmg * combo_bonus/100)
         trap_mult = 1 - (data['raid_trap_level'] * 0.1)
@@ -2004,8 +2004,8 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
         await state.update_data(raid_enemy_hp=new_enemy_hp, raid_player_hp=new_hp)
         
     elif skill['type'] == 'berserk':
-        base_dmg = skill.get('dmg', 25)
-        self_dmg = skill.get('self_dmg', 10)
+        base_dmg = int(skill.get('dmg', 0))
+        self_dmg = int(skill.get('self_dmg', 0))
         if combo_bonus > 0: base_dmg += int(base_dmg * combo_bonus/100)
         trap_mult = 1 - (data['raid_trap_level'] * 0.1)
         final_dmg = max(1, int(base_dmg * trap_mult))
@@ -2021,7 +2021,7 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
         await state.update_data(raid_enemy_hp=new_enemy_hp, raid_player_hp=max(0, new_player_hp))
         
     elif skill['type'] == 'dodge':
-        dodge_chance = skill.get('dodge', 0.5) * 100
+        dodge_chance = int(skill.get('dodge', 0.5)) * 100
         await state.update_data(raid_dodge_active=True, raid_dodge_chance=dodge_chance)
         action_text = f"💨 {skill['name']}: <b>{int(dodge_chance)}% шанс</b> избежать следующей атаки"
         
@@ -2039,8 +2039,8 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
         action_text = f"🎲 {skill['name']}: следующая атака x2"
         
     elif skill['type'] == 'poison':
-        base_dmg = skill.get('dmg', 8)
-        dot_dmg = skill.get('dot', 5)
+        base_dmg = int(skill.get('dmg', 0))
+        dot_dmg = int(skill.get('dot', 0))
         if combo_bonus > 0: base_dmg += int(base_dmg * combo_bonus/100)
         new_enemy_hp = data['raid_enemy_hp'] - base_dmg
         await state.update_data(raid_enemy_hp=max(0, new_enemy_hp), raid_enemy_poisoned=True, raid_poison_dmg=dot_dmg, raid_poison_turns=3)
@@ -2053,7 +2053,7 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
             return
             
     elif skill['type'] == 'multi':
-        base_dmg = skill.get('dmg', 12)
+        base_dmg = int(skill.get('dmg', 12))
         hits = skill.get('hits', 2)
         total_dmg = base_dmg * hits
         if combo_bonus > 0: total_dmg = int(total_dmg * (1 + combo_bonus/100))
@@ -2072,7 +2072,7 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
         action_text = f"☠️ {skill['name']}: дебафф на врага"
         
     elif skill['type'] == 'aoe':
-        base_dmg = skill.get('dmg', 15)
+        base_dmg = int(skill.get('dmg', 0))
         if combo_bonus > 0: base_dmg += int(base_dmg * combo_bonus/100)
         new_enemy_hp = data['raid_enemy_hp'] - base_dmg
         await state.update_data(raid_enemy_hp=max(0, new_enemy_hp))
@@ -2089,7 +2089,7 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
         action_text = f"🎼 {skill['name']}: все статы +15%"
         
     elif skill['type'] == 'counter':
-        base_dmg = skill.get('dmg', 10)
+        base_dmg = int(skill.get('dmg', 0))
         def_amount = skill.get('def', 5)
         if combo_bonus > 0: base_dmg += int(base_dmg * combo_bonus/100)
         new_enemy_hp = data['raid_enemy_hp'] - base_dmg
