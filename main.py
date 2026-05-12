@@ -461,7 +461,6 @@ async def open_pack_btn(cb: types.CallbackQuery, state: FSMContext):
     await cb.message.answer(f"📦 <b>{PACKS[pid]['name']}</b>\n\nОткрыть?",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🎉 Открыть", callback_data=f"open_pack:{pid}")],
-            [InlineKeyboardButton(text="В меню", callback_data="menu")]
         ]))
     await cb.answer()
 
@@ -571,7 +570,6 @@ async def manual_main(cb: types.CallbackQuery):
         [InlineKeyboardButton(text="🎴 Юниты", callback_data="manual_units")],
         [InlineKeyboardButton(text="⚔️ Комбо", callback_data="manual_combos")],
         [InlineKeyboardButton(text="🏗️ База", callback_data="manual_base")],
-        [InlineKeyboardButton(text="В меню", callback_data="menu")]
     ]
     await cb.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
     await cb.answer()
@@ -637,7 +635,6 @@ async def base_menu(msg: types.Message, state: FSMContext):
     kb = [
         [InlineKeyboardButton(text="⬆️ Улучшить базу", callback_data="base_upgrade_main")],
         [InlineKeyboardButton(text="🌳 Дерево навыков", callback_data="base_skill_tree")],
-        [InlineKeyboardButton(text="В меню", callback_data="menu")]
     ]
     await msg.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
 
@@ -702,7 +699,6 @@ async def clan_menu(msg: types.Message, state: FSMContext):
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="➕ Создать клан", callback_data="clan_create")],
                 [InlineKeyboardButton(text="🔍 Вступить в клан", callback_data="clan_join_menu")],
-                [InlineKeyboardButton(text="В меню", callback_data="menu")]
             ]))
         return
     clan = get_clan(u[6])
@@ -752,7 +748,6 @@ async def clan_name(msg: types.Message, state: FSMContext):
 async def clan_join_menu(cb: types.CallbackQuery, state: FSMContext):
     await cb.message.answer("<b>🔍 ВСТУПЛЕНИЕ В КЛАН</b>\n\n"
         "Введи ID клана (число), который дал тебе лидер:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="В меню", callback_data="menu")]]))
     await state.set_state(States.clan_join_code)
     await cb.answer()
 
@@ -813,7 +808,6 @@ async def clan_upgrades(cb: types.CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text=f"⚔️ Урон +1% ({cost}🪙)", callback_data=f"clan_upg:damage:{cost}")],
         [InlineKeyboardButton(text=f"🛡 Защита +1% ({cost}🪙)", callback_data=f"clan_upg:defense:{cost}")],
         [InlineKeyboardButton(text=f"❤️ HP +2% ({cost}🪙)", callback_data=f"clan_upg:hp:{cost}")],
-        [InlineKeyboardButton(text="В меню", callback_data="menu")]
     ]
     await cb.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
     await cb.answer()
@@ -966,7 +960,6 @@ async def live_menu(msg: types.Message, state: FSMContext):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔴 Создать комнату", callback_data="live_create")],
         [InlineKeyboardButton(text="🔵 Присоединиться", callback_data="live_join_menu")],
-        [InlineKeyboardButton(text="В меню", callback_data="menu")]
     ])
     await msg.answer("<b>⚔️ LIVE ДУЭЛЬ</b>\n\nВыбери действие:", reply_markup=kb)
 
@@ -1000,7 +993,7 @@ async def live_create(cb: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data == "live_join_menu")
 async def live_join_menu(cb: types.CallbackQuery, state: FSMContext):
-    await cb.message.answer("<b>🔵 Введи ID комнаты:</b>", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="В меню", callback_data="menu")]]))
+    await cb.message.answer("<b>🔵 Введи ID комнаты:</b>")
     await state.set_state(States.live_join)
     await cb.answer()
 
