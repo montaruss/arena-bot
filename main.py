@@ -1334,28 +1334,30 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
                         break
             
             if skill_type == 'heal':
-                heal_amount = int(skill.get('heal', 0))
+                heal_amount = int(skill.get('heal', 0))  # ✅ Две скобки в конце
                 if combo_bonus > 0:
                     heal_amount = int(heal_amount * (1 + combo_bonus/100))
                 my_hp = min(data['my_max_hp'], my_hp + heal_amount)
                 result_text += f"✨ {my_role_name} восстановил {heal_amount} HP\n"
                 
             elif skill_type == 'defend':
-                def_amount = int(skill.get('def', 0))
+                def_amount = int(skill.get('def', 0))  # ✅ Две скобки
                 if combo_bonus > 0:
                     def_amount += int(def_amount * combo_bonus/100)
                 await state.update_data(defense_buff=def_amount)
                 result_text += f"🛡️ {my_role_name} повысил защиту на {def_amount}\n"
                 
             elif skill_type in ['attack', 'magic']:
-
-                print(f"🔍 DEBUG: Ищу урон для {unit_id} -> {skill_name}")
-                print(f"📦 DEBUG: Данные навыка из CARDS: {skill}")
-                base_dmg = int(skill.get('dmg', 0))
-                print(f"💥 DEBUG: Базовый урон из CARDS = {base_dmg}")
+                # 🔍 DEBUG: Смотри логи Render
+                print(f"🔍 DEBUG: Unit={unit_id}, Skill={skill_name}, Data={skill}")
+                
+                base_dmg = int(skill.get('dmg', 0))  # ✅ Две скобки
+                print(f"💥 DEBUG: Base damage = {base_dmg}")
+                
                 if combo_bonus > 0:
                     base_dmg += int(base_dmg * combo_bonus/100)
-                    print(f"🔥 DEBUG: Урон с комбо = {base_dmg}")
+                    print(f"🔥 DEBUG: With combo = {base_dmg}")
+                    
                 enemy_hp -= base_dmg
                 result_text += f"⚔️ {my_role_name} нанёс {base_dmg} урона"
                 if combo_msg:
@@ -1363,7 +1365,7 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
                 result_text += "\n"
                 
             elif skill_type == 'lifesteal':
-                base_dmg = int(skill.get('dmg', 0))
+                base_dmg = int(skill.get('dmg', 0))  # ✅ Две скобки
                 lifesteal_pct = skill.get('lifesteal', 0.5)
                 if combo_bonus > 0:
                     base_dmg += int(base_dmg * combo_bonus/100)
@@ -1373,7 +1375,7 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
                 result_text += f"🩸 {my_role_name}: {base_dmg} урона, +{heal_amount} HP\n"
                 
             elif skill_type == 'berserk':
-                base_dmg = int(skill.get('dmg', 0))
+                base_dmg = int(skill.get('dmg', 0))  # ✅ Две скобки
                 self_dmg = skill.get('self_dmg', 10)
                 if combo_bonus > 0:
                     base_dmg += int(base_dmg * combo_bonus/100)
@@ -1395,17 +1397,16 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
         
         if skill:
             if skill_type in ['attack', 'magic']:
-                base_dmg = int(skill.get('dmg', 0))
+                base_dmg = int(skill.get('dmg', 0))  # ✅ Две скобки
                 defense = data.get('defense_buff', 0)
                 if defense > 0:
                     base_dmg = max(1, base_dmg - defense)
                     await state.update_data(defense_buff=0)
-                
                 my_hp -= base_dmg
                 result_text += f"⚔️ {enemy_role_name} нанёс {base_dmg} урона\n"
             
             elif skill_type == 'heal':
-                heal_amount = int(skill.get('heal', 0))
+                heal_amount = int(skill.get('heal', 0))  # ✅ Две скобки
                 result_text += f"✨ {enemy_role_name} восстановил {heal_amount} HP\n"
     
     # ✅ ПРОВЕРКА ПОБЕДЫ
@@ -1428,7 +1429,7 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
     # Обновляем состояние
     await state.update_data(my_hp=max(0, my_hp), enemy_hp=max(0, enemy_hp))
     
-    # Сбрасываем действия и УСТАНАВЛИВАЕМ время начала следующего раунда (ИСПРАВЛЕНО НА POSTGRESQL)
+    # Сбрасываем действия (ИСПРАВЛЕНО НА POSTGRESQL)
     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
     current_time = int(time.time())
@@ -1442,7 +1443,7 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
     
     result_text += f"\n❤️ Ваш HP: {my_hp}\n💀 HP врага: {enemy_hp}"
     
-    # ✅ ОТПРАВЛЯЕМ ОБОИМ ИГРОКАМ (ИСПРАВЛЕНО НА POSTGRESQL)
+    # Отправляем обоим игрокам
     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
     c.execute("SELECT host_chat_id, guest_chat_id FROM rooms WHERE room_id=%s", (room_id,))
@@ -1451,7 +1452,6 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
     
     if chats:
         host_chat, guest_chat = chats
-        
         try:
             await bot.send_message(host_chat, result_text)
         except: pass
