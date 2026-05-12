@@ -1348,9 +1348,14 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
                 result_text += f"🛡️ {my_role_name} повысил защиту на {def_amount}\n"
                 
             elif skill_type in ['attack', 'magic']:
+
+                print(f"🔍 DEBUG: Ищу урон для {unit_id} -> {skill_name}")
+                print(f"📦 DEBUG: Данные навыка из CARDS: {skill}")
                 base_dmg = int(skill.get('dmg', 0))
+                print(f"💥 DEBUG: Базовый урон из CARDS = {base_dmg}")
                 if combo_bonus > 0:
                     base_dmg += int(base_dmg * combo_bonus/100)
+                    print(f"🔥 DEBUG: Урон с комбо = {base_dmg}")
                 enemy_hp -= base_dmg
                 result_text += f"⚔️ {my_role_name} нанёс {base_dmg} урона"
                 if combo_msg:
