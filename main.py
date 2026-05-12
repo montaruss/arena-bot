@@ -1311,11 +1311,15 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
         skill_type = my_action['skill_type']
         
         skill = None
+        # 🔍 Ищем навык в CARDS (используем .strip() для надежности)
         for s in CARDS[unit_id]['skills']:
-            if s['name'] == skill_name:
+            if s['name'].strip() == skill_name.strip():
                 skill = s
                 break
         
+        if not skill:
+            print(f"❌ LIVE ERROR: Навык '{skill_name}' НЕ НАЙДЕН у юнита {unit_id}!")
+
         if skill:
             combo_bonus = 0
             combo_msg = ""
@@ -1334,29 +1338,26 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
                         break
             
             if skill_type == 'heal':
-                heal_amount = int(skill.get('heal', 0))  # ✅ Две скобки в конце
+                heal_amount = int(skill.get('heal', 0))
                 if combo_bonus > 0:
                     heal_amount = int(heal_amount * (1 + combo_bonus/100))
                 my_hp = min(data['my_max_hp'], my_hp + heal_amount)
                 result_text += f"✨ {my_role_name} восстановил {heal_amount} HP\n"
                 
             elif skill_type == 'defend':
-                def_amount = int(skill.get('def', 0))  # ✅ Две скобки
+                def_amount = int(skill.get('def', 0))
                 if combo_bonus > 0:
                     def_amount += int(def_amount * combo_bonus/100)
                 await state.update_data(defense_buff=def_amount)
                 result_text += f"🛡️ {my_role_name} повысил защиту на {def_amount}\n"
                 
             elif skill_type in ['attack', 'magic']:
-                # 🔍 DEBUG: Смотри логи Render
-                print(f"🔍 DEBUG: Unit={unit_id}, Skill={skill_name}, Data={skill}")
-                
-                base_dmg = int(skill.get('dmg', 0))  # ✅ Две скобки
-                print(f"💥 DEBUG: Base damage = {base_dmg}")
+                # ✅ БЕРЕМ УРОН ИЗ 'dmg' (как в твоем CARDS)
+                base_dmg = int(skill.get('dmg', 0)) 
+                print(f"✅ LIVE: {skill_name} | Базовый урон из CARDS = {base_dmg}")
                 
                 if combo_bonus > 0:
                     base_dmg += int(base_dmg * combo_bonus/100)
-                    print(f"🔥 DEBUG: With combo = {base_dmg}")
                     
                 enemy_hp -= base_dmg
                 result_text += f"⚔️ {my_role_name} нанёс {base_dmg} урона"
@@ -1365,7 +1366,7 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
                 result_text += "\n"
                 
             elif skill_type == 'lifesteal':
-                base_dmg = int(skill.get('dmg', 0))  # ✅ Две скобки
+                base_dmg = int(skill.get('dmg', 0))
                 lifesteal_pct = skill.get('lifesteal', 0.5)
                 if combo_bonus > 0:
                     base_dmg += int(base_dmg * combo_bonus/100)
@@ -1375,7 +1376,7 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
                 result_text += f"🩸 {my_role_name}: {base_dmg} урона, +{heal_amount} HP\n"
                 
             elif skill_type == 'berserk':
-                base_dmg = int(skill.get('dmg', 0))  # ✅ Две скобки
+                base_dmg = int(skill.get('dmg', 0))
                 self_dmg = skill.get('self_dmg', 10)
                 if combo_bonus > 0:
                     base_dmg += int(base_dmg * combo_bonus/100)
@@ -1391,22 +1392,23 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
         
         skill = None
         for s in CARDS[unit_id]['skills']:
-            if s['name'] == skill_name:
+            if s['name'].strip() == skill_name.strip():
                 skill = s
                 break
         
         if skill:
             if skill_type in ['attack', 'magic']:
-                base_dmg = int(skill.get('dmg', 0))  # ✅ Две скобки
+                base_dmg = int(skill.get('dmg', 0))
                 defense = data.get('defense_buff', 0)
                 if defense > 0:
                     base_dmg = max(1, base_dmg - defense)
                     await state.update_data(defense_buff=0)
+                
                 my_hp -= base_dmg
                 result_text += f"⚔️ {enemy_role_name} нанёс {base_dmg} урона\n"
             
             elif skill_type == 'heal':
-                heal_amount = int(skill.get('heal', 0))  # ✅ Две скобки
+                heal_amount = int(skill.get('heal', 0))
                 result_text += f"✨ {enemy_role_name} восстановил {heal_amount} HP\n"
     
     # ✅ ПРОВЕРКА ПОБЕДЫ
@@ -1942,6 +1944,18 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
     last_skill_name = data.get("raid_last_skill")
     curr_skill_name = skill['name']
     
+    # 🔍 Ищем навык в CARDS для проверки комбо
+    skill_obj = None
+    for s in CARDS[curr]['skills']:
+        if s['name'].strip() == curr_skill_name.strip():
+            skill_obj = s
+            break
+            
+    if not skill_obj:
+        print(f"❌ REID ERROR: Навык '{curr_skill_name}' НЕ НАЙДЕН у юнита {curr}!")
+        await cb.answer("❌ Ошибка навыка!", show_alert=True)
+        return
+
     for combo_id, combo_data in COMBOS.items():
         combo_skills = combo_data['skills']
         current_idx = next((i for i, (uid, sn) in enumerate(combo_skills) if uid == curr and sn == curr_skill_name), -1)
@@ -1954,27 +1968,36 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
     
     action_text = ""
     
-    if skill['type'] == 'heal':
-        heal_amount = int(skill.get('heal', 0))
+    # ✅ ИСПОЛЬЗУЕМ skill_obj, в котором есть 'dmg'
+    skill_type = skill_obj['type']
+
+    if skill_type == 'heal':
+        heal_amount = int(skill_obj.get('heal', 0))
         if combo_bonus > 0: heal_amount = int(heal_amount * (1 + combo_bonus/100))
         new_hp = min(data['raid_player_max_hp'], data['raid_player_hp'] + heal_amount)
         await state.update_data(raid_player_hp=new_hp)
-        action_text = f"✨ {skill['name']}: восстановлено <b>{heal_amount} HP</b>"
+        action_text = f"✨ {skill_obj['name']}: восстановлено <b>{heal_amount} HP</b>"
         
-    elif skill['type'] == 'defend':
-        def_amount = int(skill.get('def', 0))
+    elif skill_type == 'defend':
+        def_amount = int(skill_obj.get('def', 0))
         if combo_bonus > 0: def_amount += int(def_amount * combo_bonus/100)
         await state.update_data(raid_defense_buff=def_amount)
-        action_text = f"🛡️ {skill['name']}: защита повышена на <b>{def_amount}</b>"
+        action_text = f"🛡️ {skill_obj['name']}: защита повышена на <b>{def_amount}</b>"
         
-    elif skill['type'] in ['attack', 'magic']:
-        base_dmg = int(skill.get('dmg', 0))
-        if combo_bonus > 0: base_dmg += int(base_dmg * combo_bonus/100)
+    elif skill_type in ['attack', 'magic']:
+        # ✅ БЕРЕМ УРОН ИЗ 'dmg'
+        base_dmg = int(skill_obj.get('dmg', 0))
+        print(f"✅ REID: {skill_obj['name']} | Базовый урон из CARDS = {base_dmg}")
+        
+        if combo_bonus > 0: 
+            base_dmg += int(base_dmg * combo_bonus / 100)
+            
         trap_mult = 1 - (data['raid_trap_level'] * 0.1)
         final_dmg = max(1, int(base_dmg * trap_mult))
+        
         new_enemy_hp = data['raid_enemy_hp'] - final_dmg
-        action_text = f"⚔️ {skill['name']}: нанесено <b>{final_dmg} урона</b>"
-        if skill.get('stun_chance') and random.randint(1, 100) <= skill['stun_chance']:
+        action_text = f"⚔️ {skill_obj['name']}: нанесено <b>{final_dmg} урона</b>"
+        if skill_obj.get('stun_chance') and random.randint(1, 100) <= skill_obj['stun_chance']:
             await state.update_data(enemy_stunned=True, stun_turns=1)
             action_text += f"\n✨ Враг оглушен!"
         if new_enemy_hp <= 0:
@@ -1985,16 +2008,16 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
             return
         await state.update_data(raid_enemy_hp=new_enemy_hp)
         
-    elif skill['type'] == 'lifesteal':
-        base_dmg = int(skill.get('dmg', 0))
-        lifesteal_pct = skill.get('lifesteal', 0.5)
+    elif skill_type == 'lifesteal':
+        base_dmg = int(skill_obj.get('dmg', 0))
+        lifesteal_pct = skill_obj.get('lifesteal', 0.5)
         if combo_bonus > 0: base_dmg += int(base_dmg * combo_bonus/100)
         trap_mult = 1 - (data['raid_trap_level'] * 0.1)
         final_dmg = max(1, int(base_dmg * trap_mult))
         heal_amount = int(final_dmg * lifesteal_pct)
         new_enemy_hp = data['raid_enemy_hp'] - final_dmg
         new_hp = min(data['raid_player_max_hp'], data['raid_player_hp'] + heal_amount)
-        action_text = f"🩸 {skill['name']}: {final_dmg} урона, +{heal_amount} HP"
+        action_text = f"🩸 {skill_obj['name']}: {final_dmg} урона, +{heal_amount} HP"
         if new_enemy_hp <= 0:
             await state.update_data(raid_enemy_hp=0, raid_player_hp=new_hp)
             if combo_msg: action_text += f"\n{combo_msg}"
@@ -2003,15 +2026,15 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
             return
         await state.update_data(raid_enemy_hp=new_enemy_hp, raid_player_hp=new_hp)
         
-    elif skill['type'] == 'berserk':
-        base_dmg = int(skill.get('dmg', 0))
-        self_dmg = int(skill.get('self_dmg', 0))
+    elif skill_type == 'berserk':
+        base_dmg = int(skill_obj.get('dmg', 0))
+        self_dmg = skill_obj.get('self_dmg', 10)
         if combo_bonus > 0: base_dmg += int(base_dmg * combo_bonus/100)
         trap_mult = 1 - (data['raid_trap_level'] * 0.1)
         final_dmg = max(1, int(base_dmg * trap_mult))
         new_enemy_hp = data['raid_enemy_hp'] - final_dmg
         new_player_hp = data['raid_player_hp'] - self_dmg
-        action_text = f"💀 {skill['name']}: {final_dmg} урона врагу, {self_dmg} себе"
+        action_text = f"💀 {skill_obj['name']}: {final_dmg} урона врагу, {self_dmg} себе"
         if new_enemy_hp <= 0:
             await state.update_data(raid_enemy_hp=0, raid_player_hp=max(0, new_player_hp))
             if combo_msg: action_text += f"\n{combo_msg}"
@@ -2020,31 +2043,31 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
             return
         await state.update_data(raid_enemy_hp=new_enemy_hp, raid_player_hp=max(0, new_player_hp))
         
-    elif skill['type'] == 'dodge':
-        dodge_chance = int(skill.get('dodge', 0.5)) * 100
+    elif skill_type == 'dodge':
+        dodge_chance = skill_obj.get('dodge', 0.5) * 100
         await state.update_data(raid_dodge_active=True, raid_dodge_chance=dodge_chance)
-        action_text = f"💨 {skill['name']}: <b>{int(dodge_chance)}% шанс</b> избежать следующей атаки"
+        action_text = f"💨 {skill_obj['name']}: <b>{int(dodge_chance)}% шанс</b> избежать следующей атаки"
         
-    elif skill['type'] == 'buff':
+    elif skill_type == 'buff':
         await state.update_data(raid_buff_active=True)
-        action_text = f"✨ {skill['name']}: бафф активирован"
+        action_text = f"✨ {skill_obj['name']}: бафф активирован"
         
-    elif skill['type'] == 'shield':
-        shield_amount = skill.get('shield', 30)
+    elif skill_type == 'shield':
+        shield_amount = skill_obj.get('shield', 30)
         await state.update_data(raid_shield=shield_amount)
-        action_text = f"🛡️ {skill['name']}: щит на <b>{shield_amount}</b>"
+        action_text = f"🛡️ {skill_obj['name']}: щит на <b>{shield_amount}</b>"
         
-    elif skill['type'] == 'crit':
+    elif skill_type == 'crit':
         await state.update_data(raid_crit_ready=True)
-        action_text = f"🎲 {skill['name']}: следующая атака x2"
+        action_text = f"🎲 {skill_obj['name']}: следующая атака x2"
         
-    elif skill['type'] == 'poison':
-        base_dmg = int(skill.get('dmg', 0))
-        dot_dmg = int(skill.get('dot', 0))
+    elif skill_type == 'poison':
+        base_dmg = int(skill_obj.get('dmg', 0))
+        dot_dmg = skill_obj.get('dot', 5)
         if combo_bonus > 0: base_dmg += int(base_dmg * combo_bonus/100)
         new_enemy_hp = data['raid_enemy_hp'] - base_dmg
         await state.update_data(raid_enemy_hp=max(0, new_enemy_hp), raid_enemy_poisoned=True, raid_poison_dmg=dot_dmg, raid_poison_turns=3)
-        action_text = f"🧪 {skill['name']}: {base_dmg} урона + {dot_dmg}/ход"
+        action_text = f"🧪 {skill_obj['name']}: {base_dmg} урона + {dot_dmg}/ход"
         if new_enemy_hp <= 0:
             await state.update_data(raid_enemy_hp=0)
             if combo_msg: action_text += f"\n{combo_msg}"
@@ -2052,14 +2075,14 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
             await raid_finish(cb, state, win=True)
             return
             
-    elif skill['type'] == 'multi':
-        base_dmg = int(skill.get('dmg', 12))
-        hits = skill.get('hits', 2)
+    elif skill_type == 'multi':
+        base_dmg = int(skill_obj.get('dmg', 0))
+        hits = skill_obj.get('hits', 2)
         total_dmg = base_dmg * hits
         if combo_bonus > 0: total_dmg = int(total_dmg * (1 + combo_bonus/100))
         new_enemy_hp = data['raid_enemy_hp'] - total_dmg
         await state.update_data(raid_enemy_hp=max(0, new_enemy_hp))
-        action_text = f"🏹 {skill['name']}: {hits} удара = <b>{total_dmg} урона</b>"
+        action_text = f"🏹 {skill_obj['name']}: {hits} удара = <b>{total_dmg} урона</b>"
         if new_enemy_hp <= 0:
             await state.update_data(raid_enemy_hp=0)
             if combo_msg: action_text += f"\n{combo_msg}"
@@ -2067,16 +2090,16 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
             await raid_finish(cb, state, win=True)
             return
             
-    elif skill['type'] == 'debuff':
+    elif skill_type == 'debuff':
         await state.update_data(raid_enemy_debuff=True)
-        action_text = f"☠️ {skill['name']}: дебафф на врага"
+        action_text = f"☠️ {skill_obj['name']}: дебафф на врага"
         
-    elif skill['type'] == 'aoe':
-        base_dmg = int(skill.get('dmg', 0))
+    elif skill_type == 'aoe':
+        base_dmg = int(skill_obj.get('dmg', 0))
         if combo_bonus > 0: base_dmg += int(base_dmg * combo_bonus/100)
         new_enemy_hp = data['raid_enemy_hp'] - base_dmg
         await state.update_data(raid_enemy_hp=max(0, new_enemy_hp))
-        action_text = f"💣 {skill['name']}: {base_dmg} урона"
+        action_text = f"💣 {skill_obj['name']}: {base_dmg} урона"
         if new_enemy_hp <= 0:
             await state.update_data(raid_enemy_hp=0)
             if combo_msg: action_text += f"\n{combo_msg}"
@@ -2084,17 +2107,17 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
             await raid_finish(cb, state, win=True)
             return
             
-    elif skill['type'] == 'ultimate_buff':
+    elif skill_type == 'ultimate_buff':
         await state.update_data(raid_all_stats_buff=True)
-        action_text = f"🎼 {skill['name']}: все статы +15%"
+        action_text = f"🎼 {skill_obj['name']}: все статы +15%"
         
-    elif skill['type'] == 'counter':
-        base_dmg = int(skill.get('dmg', 0))
-        def_amount = skill.get('def', 5)
+    elif skill_type == 'counter':
+        base_dmg = int(skill_obj.get('dmg', 0))
+        def_amount = skill_obj.get('def', 5)
         if combo_bonus > 0: base_dmg += int(base_dmg * combo_bonus/100)
         new_enemy_hp = data['raid_enemy_hp'] - base_dmg
         await state.update_data(raid_enemy_hp=max(0, new_enemy_hp), raid_defense_buff=def_amount)
-        action_text = f"💪 {skill['name']}: {base_dmg} урона, защита +{def_amount}"
+        action_text = f"💪 {skill_obj['name']}: {base_dmg} урона, защита +{def_amount}"
         if new_enemy_hp <= 0:
             await state.update_data(raid_enemy_hp=0)
             if combo_msg: action_text += f"\n{combo_msg}"
@@ -2102,7 +2125,7 @@ async def raid_exec(cb: types.CallbackQuery, state: FSMContext):
             await raid_finish(cb, state, win=True)
             return
     else:
-        action_text = f"⚠️ {skill['name']}: эффект активирован"
+        action_text = f"⚠️ {skill_obj['name']}: эффект активирован"
     
     if combo_msg: action_text += f"\n{combo_msg}"
     
