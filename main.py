@@ -1004,6 +1004,7 @@ async def live_join_process(msg: types.Message, state: FSMContext):
     room_id = msg.text.strip()
     deck = json.loads(u[9])
     
+    # ✅ ИСПРАВЛЕНО: Используем PostgreSQL вместо SQLite
     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
     c.execute("SELECT host_id, status FROM rooms WHERE room_id=%s", (room_id,))
@@ -1023,6 +1024,7 @@ async def live_join_process(msg: types.Message, state: FSMContext):
                  WHERE room_id=%s""", (msg.from_user.id, msg.from_user.id, json.dumps(deck), room_id))
     conn.commit()
     conn.close()
+    
     await init_live_battle(msg, state, room_id, "guest")
 
 
@@ -1030,11 +1032,14 @@ async def live_join_process(msg: types.Message, state: FSMContext):
 async def check_room(cb: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     room_id = data.get("room_id")
+    
+    # ✅ ИСПРАВЛЕНО: Используем PostgreSQL
     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
     c.execute("SELECT status FROM rooms WHERE room_id=%s", (room_id,))
     row = c.fetchone()
     conn.close()
+    
     if row and row[0] == 'ready':
         await init_live_battle(cb.message, state, room_id, "host")
     else:
