@@ -444,7 +444,7 @@ async def card_info(cb: types.CallbackQuery):
         for skill in c['skills']:
             text += f"  • {skill['name']}: {skill['desc']} ({skill['mana']}💧)\n"
         text += "\n"
-    await cb.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
+    await cb.message.edit_text(text)
     await cb.answer()
 
 @dp.callback_query(F.data.startswith("open_pack_btn:"))
