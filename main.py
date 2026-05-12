@@ -286,18 +286,21 @@ def update_user(uid, **kwargs):
 
 def get_clan(cid):
     if not cid: return None
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT * FROM clans WHERE id=?", (cid,))
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    c = conn.cursor(cursor_factory=RealDictCursor)
+    c.execute("SELECT * FROM clans WHERE id=%s", (cid,))
     row = c.fetchone()
     conn.close()
-    return row
+    if not row: return None
+    return (row['id'], row['name'], row['emoji'], row['leader_id'], 
+            row['level'], row['members'], row['clan_damage_bonus'], 
+            row['clan_defense_bonus'], row['clan_hp_bonus'], row.get('join_code'))
 
 def update_clan(cid, **kwargs):
-    conn = sqlite3.connect(DB_NAME)
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
     for k, v in kwargs.items():
-        c.execute(f"UPDATE clans SET {k}=? WHERE id=?", (v, cid))
+        c.execute(f"UPDATE clans SET {k}=%s WHERE id=%s", (v, cid))
     conn.commit()
     conn.close()
 
@@ -320,29 +323,34 @@ def has_emoji(text):
     return bool(emoji_pattern.search(text))
 
 def get_unit_level(uid, unit_id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT level, copies FROM unit_levels WHERE user_id=? AND unit_id=?", (uid, unit_id))
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    c = conn.cursor(cursor_factory=RealDictCursor)
+    c.execute("SELECT level, copies FROM unit_levels WHERE user_id=%s AND unit_id=%s", (uid, unit_id))
     row = c.fetchone()
     conn.close()
-    return (row[0], row[1]) if row else (1, 1)
+    return (row['level'], row['copies']) if row else (1, 1)
 
 def upgrade_unit(uid, unit_id):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT cards FROM players WHERE user_id=?", (uid,))
-    cards = json.loads(c.fetchone()[0])
-    c.execute("SELECT level FROM unit_levels WHERE user_id=? AND unit_id=?", (uid, unit_id))
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    c = conn.cursor(cursor_factory=RealDictCursor)
+    c.execute("SELECT cards FROM players WHERE user_id=%s", (uid,))
+    cards = json.loads(c.fetchone()['cards'])
+    c.execute("SELECT level FROM unit_levels WHERE user_id=%s AND unit_id=%s", (uid, unit_id))
     row = c.fetchone()
-    current_level = row[0] if row else 1
+    current_level = row['level'] if row else 1
     conn.close()
+    
     owned = cards.get(unit_id, 0)
     required = 2 ** current_level
     if owned >= required:
         new_level = current_level + 1
-        conn = sqlite3.connect(DB_NAME)
+        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
         c = conn.cursor()
-        c.execute("INSERT OR REPLACE INTO unit_levels VALUES (?,?,?,?)", (uid, unit_id, new_level, owned))
+        c.execute("""INSERT INTO unit_levels (user_id, unit_id, level, copies) 
+                     VALUES (%s, %s, %s, %s)
+                     ON CONFLICT (user_id, unit_id) 
+                     DO UPDATE SET level=%s, copies=%s""", 
+                  (uid, unit_id, new_level, owned, new_level, owned))
         conn.commit()
         conn.close()
         return True, new_level
@@ -724,15 +732,15 @@ async def clan_create(cb: types.CallbackQuery, state: FSMContext):
 @dp.message(States.clan_input)
 async def clan_name(msg: types.Message, state: FSMContext):
     if 3 <= len(msg.text) <= 15:
-        conn = sqlite3.connect(DB_NAME)
+        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
         c = conn.cursor()
         try:
-            c.execute("INSERT INTO clans (name, leader_id) VALUES (?,?)", (msg.text.strip(), msg.from_user.id))
-            cid = c.lastrowid
+            c.execute("INSERT INTO clans (name, leader_id) VALUES (%s,%s) RETURNING id", (msg.text.strip(), msg.from_user.id))
+            cid = c.fetchone()[0]
             conn.commit()
             update_user(msg.from_user.id, clan_id=cid)
             await msg.answer(f"✅ Клан '{msg.text}' создан! ID: {cid}", reply_markup=main_kb())
-        except:
+        except psycopg2.errors.UniqueViolation:
             await msg.answer("❌ Имя занято:")
         finally:
             conn.close()
@@ -756,20 +764,20 @@ async def clan_join_code(msg: types.Message, state: FSMContext):
     except:
         await msg.answer("❌ ID должен быть числом!")
         return
-    conn = sqlite3.connect(DB_NAME)
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
-    c.execute("SELECT id, members FROM clans WHERE id=?", (clan_id,))
+    c.execute("SELECT id, members FROM clans WHERE id=%s", (clan_id,))
     row = c.fetchone()
     if row:
         update_user(msg.from_user.id, clan_id=clan_id)
-        c.execute("UPDATE clans SET members=members+1 WHERE id=?", (clan_id,))
+        c.execute("UPDATE clans SET members=members+1 WHERE id=%s", (clan_id,))
         conn.commit()
         conn.close()
         await msg.answer("✅ Ты вступил в клан!", reply_markup=main_kb())
     else:
         await msg.answer("❌ Клан не найден!")
     await state.clear()
-
+    
 @dp.callback_query(F.data == "clan_emoji")
 async def clan_emoji_set(cb: types.CallbackQuery, state: FSMContext):
     await cb.message.answer("<b>Введи 1 смайлик для клана:</b>")
@@ -837,9 +845,9 @@ async def clan_leave(cb: types.CallbackQuery):
         await cb.answer("❌ Лидер не может выйти!", show_alert=True)
         return
     update_user(cb.from_user.id, clan_id=None)
-    conn = sqlite3.connect(DB_NAME)
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
-    c.execute("UPDATE clans SET members=members-1 WHERE id=?", (u[6],))
+    c.execute("UPDATE clans SET members=members-1 WHERE id=%s", (u[6],))
     conn.commit()
     conn.close()
     await cb.message.answer("✅ Ты вышел из клана", reply_markup=main_kb())
@@ -895,14 +903,14 @@ async def rating(msg: types.Message):
 
 @dp.callback_query(F.data == "rating_players")
 async def rating_players(cb: types.CallbackQuery):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    c = conn.cursor(cursor_factory=RealDictCursor)
     c.execute("SELECT name, rating FROM players ORDER BY rating DESC LIMIT 5")
     rows = c.fetchall()
     conn.close()
     text = "<b>👤 ТОП ИГРОКОВ</b>\n\n"
     for i, r in enumerate(rows, 1):
-        text += f"{i}. {r[0] or 'Игрок'} | ⭐ {r[1]}\n"
+        text += f"{i}. {r['name'] or 'Игрок'} | ⭐ {r['rating']}\n"
     await cb.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔙 К рейтингу", callback_data="rating_menu_back")]
     ]))
@@ -910,14 +918,14 @@ async def rating_players(cb: types.CallbackQuery):
 
 @dp.callback_query(F.data == "rating_clans")
 async def rating_clans(cb: types.CallbackQuery):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    c = conn.cursor(cursor_factory=RealDictCursor)
     c.execute("SELECT name, level, members FROM clans ORDER BY level DESC LIMIT 5")
     rows = c.fetchall()
     conn.close()
     text = "<b>🏛️ ТОП КЛАНОВ</b>\n\n"
     for i, r in enumerate(rows, 1):
-        text += f"{i}. {r[0]} | Ур.{r[1]} | 👥 {r[2]}\n"
+        text += f"{i}. {r['name']} | Ур.{r['level']} | 👥 {r['members']}\n"
     await cb.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔙 К рейтингу", callback_data="rating_menu_back")]
     ]))
@@ -967,11 +975,15 @@ async def live_create(cb: types.CallbackQuery, state: FSMContext):
     room_id = f"{cb.from_user.id}{random.randint(1000,9999)}"
     u = get_user(cb.from_user.id)
     deck = json.loads(u[9])
-    conn = sqlite3.connect(DB_NAME)
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
-    c.execute("""INSERT OR REPLACE INTO rooms 
+    c.execute("""INSERT INTO rooms 
         (room_id, host_id, guest_id, host_chat_id, host_deck, guest_deck, status, current_turn, host_mana, guest_mana) 
-        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (room_id) DO UPDATE SET 
+        host_id=EXCLUDED.host_id, guest_id=EXCLUDED.guest_id, host_chat_id=EXCLUDED.host_chat_id,
+        host_deck=EXCLUDED.host_deck, guest_deck=EXCLUDED.guest_deck, status=EXCLUDED.status,
+        current_turn=EXCLUDED.current_turn, host_mana=EXCLUDED.host_mana, guest_mana=EXCLUDED.guest_mana""",
         (room_id, cb.from_user.id, None, cb.from_user.id, json.dumps(deck), "", "waiting", "host", 3, 3))
     conn.commit()
     conn.close()
@@ -1002,9 +1014,9 @@ async def live_join_process(msg: types.Message, state: FSMContext):
     room_id = msg.text.strip()
     deck = json.loads(u[9])
     
-    conn = sqlite3.connect(DB_NAME)
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
-    c.execute("SELECT host_id, status FROM rooms WHERE room_id=?", (room_id,))
+    c.execute("SELECT host_id, status FROM rooms WHERE room_id=%s", (room_id,))
     row = c.fetchone()
     
     if not row:
@@ -1017,12 +1029,10 @@ async def live_join_process(msg: types.Message, state: FSMContext):
         await msg.answer("❌ Нельзя с самим собой!")
         return
     
-    c.execute("""UPDATE rooms SET guest_id=?, guest_chat_id=?, guest_deck=?, status='ready' 
-                 WHERE room_id=?""", (msg.from_user.id, msg.from_user.id, json.dumps(deck), room_id))
+    c.execute("""UPDATE rooms SET guest_id=%s, guest_chat_id=%s, guest_deck=%s, status='ready' 
+                 WHERE room_id=%s""", (msg.from_user.id, msg.from_user.id, json.dumps(deck), room_id))
     conn.commit()
     conn.close()
-    
-    # ✅ ОТПРАВЛЯЕМ НОВОЕ СООБЩЕНИЕ, а не редактируем
     await init_live_battle(msg, state, room_id, "guest")
 
 
@@ -1030,15 +1040,12 @@ async def live_join_process(msg: types.Message, state: FSMContext):
 async def check_room(cb: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     room_id = data.get("room_id")
-    
-    conn = sqlite3.connect(DB_NAME)
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
-    c.execute("SELECT status FROM rooms WHERE room_id=?", (room_id,))
+    c.execute("SELECT status FROM rooms WHERE room_id=%s", (room_id,))
     row = c.fetchone()
     conn.close()
-    
     if row and row[0] == 'ready':
-        # ✅ Инициализируем бой для 1-го игрока
         await init_live_battle(cb.message, state, room_id, "host")
     else:
         await cb.answer("⏳ Противник ещё не присоединился. Жми 'Проверить' снова.", show_alert=True)
@@ -1246,19 +1253,19 @@ async def execute_attack_live(cb: types.CallbackQuery, state: FSMContext):
         "last_skill": data.get("last_skill_name")
     }
     
-    # ✅ СОХРАНЯЕМ ДЕЙСТВИЕ В БД
-    conn = sqlite3.connect(DB_NAME)
+    # ✅ СОХРАНЯЕМ ДЕЙСТВИЕ В БД (ИСПРАВЛЕНО НА POSTGRESQL)
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
     if role == "host":
-        c.execute("UPDATE rooms SET host_action=? WHERE room_id=?", 
+        c.execute("UPDATE rooms SET host_action=%s WHERE room_id=%s", 
                   (json.dumps(action_data), room_id))
     else:
-        c.execute("UPDATE rooms SET guest_action=? WHERE room_id=?", 
+        c.execute("UPDATE rooms SET guest_action=%s WHERE room_id=%s", 
                   (json.dumps(action_data), room_id))
     conn.commit()
     
     # Проверяем действия обоих
-    c.execute("SELECT host_action, guest_action, round_start_time FROM rooms WHERE room_id=?", (room_id,))
+    c.execute("SELECT host_action, guest_action, round_start_time FROM rooms WHERE room_id=%s", (room_id,))
     row = c.fetchone()
     host_action = json.loads(row[0]) if row[0] and row[0] != '{}' else {}
     guest_action = json.loads(row[1]) if row[1] and row[1] != '{}' else {}
@@ -1426,24 +1433,24 @@ async def process_live_round_full(cb, state, room_id, host_action, guest_action)
     # Обновляем состояние
     await state.update_data(my_hp=max(0, my_hp), enemy_hp=max(0, enemy_hp))
     
-    # Сбрасываем действия и УСТАНАВЛИВАЕМ время начала следующего раунда
-    conn = sqlite3.connect(DB_NAME)
+    # Сбрасываем действия и УСТАНАВЛИВАЕМ время начала следующего раунда (ИСПРАВЛЕНО НА POSTGRESQL)
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
     current_time = int(time.time())
     c.execute("""UPDATE rooms SET 
-                 host_action='{}', guest_action='{}', 
-                 round_start_time=?
-                 WHERE room_id=?""", 
-              (current_time, room_id))
+                 host_action=%s, guest_action=%s, 
+                 round_start_time=%s
+                 WHERE room_id=%s""", 
+              ('{}', '{}', current_time, room_id))
     conn.commit()
     conn.close()
     
     result_text += f"\n❤️ Ваш HP: {my_hp}\n💀 HP врага: {enemy_hp}"
     
-    # ✅ ОТПРАВЛЯЕМ ОБОИМ ИГРОКАМ
-    conn = sqlite3.connect(DB_NAME)
+    # ✅ ОТПРАВЛЯЕМ ОБОИМ ИГРОКАМ (ИСПРАВЛЕНО НА POSTGRESQL)
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
-    c.execute("SELECT host_chat_id, guest_chat_id FROM rooms WHERE room_id=?", (room_id,))
+    c.execute("SELECT host_chat_id, guest_chat_id FROM rooms WHERE room_id=%s", (room_id,))
     chats = c.fetchone()
     conn.close()
     
@@ -1786,15 +1793,17 @@ async def raid_menu(msg: types.Message):
     if energy <= 0:
         await msg.answer("⚡ Нет энергии! Подожди восстановления.")
         return
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute("SELECT user_id, name, rating FROM players WHERE user_id!=? LIMIT 3", (msg.from_user.id,))
+    
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    c = conn.cursor(cursor_factory=RealDictCursor)
+    c.execute("SELECT user_id, name, rating FROM players WHERE user_id!=%s LIMIT 3", (msg.from_user.id,))
     targets = c.fetchall()
     conn.close()
+    
     if not targets:
         await msg.answer("❌ Нет целей. Напиши /addtest чтобы добавить тестового бота.")
         return
-    kb = [[InlineKeyboardButton(text=f"⚔️ {t[1] or 'Игрок'} ({t[2]}⭐)", callback_data=f"raid:{t[0]}")] for t in targets]
+    kb = [[InlineKeyboardButton(text=f"⚔️ {t['name'] or 'Игрок'} ({t['rating']}⭐)", callback_data=f"raid:{t['user_id']}")] for t in targets]
     await msg.answer(f"⚡ {energy}/5 | Выбери цель для атаки:", reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
 
 @dp.callback_query(F.data.startswith("raid:"))
@@ -2233,10 +2242,18 @@ async def go_menu(cb: types.CallbackQuery, state: FSMContext):
 
 @dp.message(Command("addtest"))
 async def add_test(msg: types.Message):
-    conn = sqlite3.connect(DB_NAME)
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     c = conn.cursor()
-    c.execute("""INSERT OR REPLACE INTO players VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (999999, "TestBot", 500, 900, 5, int(time.time()), None, '{"1":5}', '{"basic":0,"rare":0,"epic":0}', '["1","1","1"]', 2, 0, '{"max_rarity":1,"relic_slots":0,"trap_level":0,"equipment_slots":0,"mana_regen":0,"crit_chance":0}', '{}', '{}', 5, 0))
+    c.execute("""INSERT INTO players 
+        (user_id, name, gold, rating, energy, energy_time, clan_id, cards, packs, deck, 
+         base_level, base_xp, base_skills, equipment, relics, wins, losses) 
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (user_id) DO UPDATE SET 
+        name=EXCLUDED.name, gold=EXCLUDED.gold, rating=EXCLUDED.rating""",
+        (999999, "TestBot", 500, 900, 5, int(time.time()), None, '{"1":5}', 
+         '{"basic":0,"rare":0,"epic":0}', '["1","1","1"]', 2, 0, 
+         '{"max_rarity":1,"relic_slots":0,"trap_level":0,"equipment_slots":0,"mana_regen":0,"crit_chance":0}', 
+         '{}', '{}', 5, 0))
     conn.commit()
     conn.close()
     await msg.answer("✅ Тестовый игрок добавлен! ID: 999999")
