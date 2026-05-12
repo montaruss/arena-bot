@@ -444,7 +444,6 @@ async def card_info(cb: types.CallbackQuery):
         for skill in c['skills']:
             text += f"  • {skill['name']}: {skill['desc']} ({skill['mana']}💧)\n"
         text += "\n"
-    kb = [[InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main")]]
     await cb.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb))
     await cb.answer()
 
@@ -906,7 +905,6 @@ async def rating_players(cb: types.CallbackQuery):
     for i, r in enumerate(rows, 1):
         text += f"{i}. {r['name'] or 'Игрок'} | ⭐ {r['rating']}\n"
     await cb.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 К рейтингу", callback_data="rating_menu_back")]
     ]))
     await cb.answer()
 
@@ -921,7 +919,6 @@ async def rating_clans(cb: types.CallbackQuery):
     for i, r in enumerate(rows, 1):
         text += f"{i}. {r['name']} | Ур.{r['level']} | 👥 {r['members']}\n"
     await cb.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 К рейтингу", callback_data="rating_menu_back")]
     ]))
     await cb.answer()
 
