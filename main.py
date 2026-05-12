@@ -745,7 +745,7 @@ async def clan_name(msg: types.Message, state: FSMContext):
 
 @dp.callback_query(F.data == "clan_join_menu")
 async def clan_join_menu(cb: types.CallbackQuery, state: FSMContext):
-    await cb.message.answer("<b>🔍 ВСТУПЛЕНИЕ В КЛАН</b>\n\n"
+    await cb.message.answer("<b>🔍 ВСТУПЛЕНИЕ В КЛАН</b>\n\n")
         "Введи ID клана (число), который дал тебе лидер:",
     await state.set_state(States.clan_join_code)
     await cb.answer()
