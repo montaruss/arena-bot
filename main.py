@@ -2278,22 +2278,17 @@ if __name__ == "__main__":
     WEBAPP_PORT = int(os.environ.get('PORT', 8080))
     
     async def on_startup(app):
-        """Устанавливаем webhook при старте"""
         if WEBHOOK_URL:
-            try:
-                await bot.set_webhook(WEBHOOK_URL, allowed_updates=dp.resolve_used_update_types())
-                print(f"✅ Webhook установлен: {WEBHOOK_URL}")
-            except Exception as e:
-                print(f"⚠️ Ошибка установки webhook: {e}")
+            await bot.set_webhook(WEBHOOK_URL, allowed_updates=dp.resolve_used_update_types())
+            print(f"✅ Webhook: {WEBHOOK_URL}")
     
-    # Создаем веб-приложение
     app = web.Application()
     app.on_startup.append(on_startup)
-    # ❌ УБРАЛИ on_shutdown - он ломает всё при закрытии
     
-    # Настраиваем обработчик вебхука
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path="/webhook")
     setup_application(app, dp, bot=bot)
     
-    print(f"🚀 Бот запущен на порту {WEBAPP_PORT}")
-    web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT)
+    print(f"🚀 Запуск на порту {WEBAPP_PORT}")
+    
+    # ✅ ПРАВИЛЬНЫЙ ЗАПУСК ДЛЯ RENDER
+    web.run_app(app, host=WEBAPP_HOST, port=WEBAPP_PORT, print=None)
